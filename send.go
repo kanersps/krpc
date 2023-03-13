@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"math/rand"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // MessageConstraint is a generic interface that all messages must implement. This
@@ -34,7 +35,7 @@ func randInt(min int, max int) int {
 
 // Send is a generic function that sends a message to a queue. If a callback is
 // provided, the response will be passed to the callback function.
-func Send[T MessageConstraint, R interface{}](message T, callback ...func(response R, err error)) error {
+func Send[T MessageConstraint](message T, callback ...func(response interface{}, err error)) error {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 
 	if err != nil {
@@ -76,6 +77,10 @@ func Send[T MessageConstraint, R interface{}](message T, callback ...func(respon
 			false,             // no-wait
 			nil,               // arguments
 		)
+
+		if err != nil {
+			return err
+		}
 
 		KnownQueues[message.Channel()] = queue
 	}
@@ -139,10 +144,14 @@ func Send[T MessageConstraint, R interface{}](message T, callback ...func(respon
 			ReplyTo:     ReplyTo,
 		})
 
+	if err != nil {
+		return err
+	}
+
 	if len(callback) > 0 {
 		for d := range msgs {
 			// Unmarshal message from JSON
-			var message R
+			var message interface{}
 			err = json.Unmarshal(d.Body, &message)
 
 			if err != nil {
@@ -150,7 +159,6 @@ func Send[T MessageConstraint, R interface{}](message T, callback ...func(respon
 			}
 
 			callback[0](message, nil)
-			break
 		}
 	}
 
